@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #12121a;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface text-slate-50 font-body antialiased overflow-x-hidden;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent-violet;
+  }
+}
+
+@layer components {
+  .mesh-bg {
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(139, 92, 246, 0.15) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 80% 20%, rgba(6, 182, 212, 0.12) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 40% at 50% 80%, rgba(251, 191, 36, 0.08) 0%, transparent 50%),
+      var(--bg-primary);
+  }
+
+  .glass {
+    @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.08];
+  }
+
+  .glass-strong {
+    @apply bg-white/[0.07] backdrop-blur-2xl border border-white/[0.12];
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-br from-accent-violet via-accent-cyan to-accent-gold bg-clip-text text-transparent;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-br from-violet-600 to-violet-700 shadow-lg shadow-violet-500/35
+           transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-500/50;
+  }
+
+  .btn-glow {
+    @apply bg-gradient-to-br from-cyan-500 to-cyan-600 shadow-lg shadow-cyan-500/35
+           transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-cyan-500/50;
+  }
+
+  .product-card {
+    @apply transition-all duration-500 ease-out hover:-translate-y-2
+           hover:shadow-2xl hover:shadow-black/40 hover:shadow-violet-500/15;
+  }
+
+  .pill-active {
+    @apply bg-gradient-to-br from-violet-500/30 to-cyan-500/20 border-violet-500 text-white;
+  }
+
+  .step-active {
+    @apply bg-gradient-to-br from-violet-500 to-cyan-500;
+  }
+
+  .step-done {
+    @apply bg-emerald-500;
+  }
+
+  .admin-nav-link.active {
+    @apply bg-violet-500/15 border-l-[3px] border-violet-500 text-white;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease forwards;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.4);
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

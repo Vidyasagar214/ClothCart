@@ -1,0 +1,645 @@
+openapi: 3.1.0
+info:
+  title: ClothCart API
+  version: 1.0.0
+  description: REST API contracts for ClothCart MVP
+
+servers:
+  - url: https://clothcart.com/api/v1
+    description: Production
+  - url: http://localhost:3000/api/v1
+    description: Development
+
+tags:
+  - name: Auth
+  - name: Products
+  - name: Cart
+  - name: Wishlist
+  - name: Checkout
+  - name: Orders
+  - name: Reviews
+  - name: Returns
+  - name: Admin
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        basePrice: { type: number }
+        compareAtPrice: { type: number, nullable: true }
+        brand: { type: object }
+        category: { type: object }
+        images: { type: array, items: { type: object } }
+        variants: { type: array, items: { type: object } }
+        avgRating: { type: number }
+        reviewCount: { type: integer }
+        inStock: { type: boolean }
+
+paths:
+  # ─── AUTH ───────────────────────────────────────────────
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, fullName]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                fullName: { type: string }
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { type: object }
+                  session: { type: object }
+        '400': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Email already exists }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email and password
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: Login successful }
+        '401': { description: Invalid credentials }
+
+  /auth/otp/send:
+    post:
+      tags: [Auth]
+      summary: Send OTP to mobile number
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string, pattern: '^\\+91[0-9]{10}$' }
+      responses:
+        '200': { description: OTP sent }
+        '429': { description: Rate limited }
+
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      summary: Verify OTP and login/register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otp]
+              properties:
+                phone: { type: string }
+                otp: { type: string, minLength: 6, maxLength: 6 }
+                fullName: { type: string }
+      responses:
+        '200': { description: Verified and logged in }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Logged out }
+
+  /auth/password/reset:
+    post:
+      tags: [Auth]
+      summary: Request password reset email
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { description: Reset email sent if account exists }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  email: { type: string }
+                  fullName: { type: string }
+                  role: { type: string, enum: [customer, admin, support] }
+
+  # ─── PRODUCTS ─────────────────────────────────────────
+  /products:
+    get:
+      tags: [Products]
+      summary: List products with filters
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 24 } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: brand, in: query, schema: { type: array, items: { type: string } } }
+        - { name: minPrice, in: query, schema: { type: number } }
+        - { name: maxPrice, in: query, schema: { type: number } }
+        - { name: size, in: query, schema: { type: array, items: { type: string } } }
+        - { name: color, in: query, schema: { type: array, items: { type: string } } }
+        - { name: gender, in: query, schema: { type: string, enum: [men, women, children, unisex] } }
+        - { name: minRating, in: query, schema: { type: number } }
+        - { name: onSale, in: query, schema: { type: boolean } }
+        - { name: sort, in: query, schema: { type: string, enum: [price_asc, price_desc, popularity, new_arrivals, relevance] } }
+      responses:
+        '200':
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Product' } }
+                  meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+  /products/search:
+    get:
+      tags: [Products]
+      summary: Keyword search
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2 } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: Search results }
+
+  /products/{slug}:
+    get:
+      tags: [Products]
+      summary: Get product by slug
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Product detail with variants, images, reviews }
+        '404': { description: Product not found }
+
+  /products/{slug}/related:
+    get:
+      tags: [Products]
+      summary: Get related products
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 8 } }
+      responses:
+        '200': { description: Related products array }
+
+  /categories:
+    get:
+      tags: [Products]
+      summary: List all categories
+      responses:
+        '200': { description: Category tree }
+
+  # ─── CART ─────────────────────────────────────────────
+  /cart:
+    get:
+      tags: [Cart]
+      security: [{ bearerAuth: [] }]
+      summary: Get current cart with totals
+      responses:
+        '200':
+          description: Cart with items and calculated totals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array }
+                  subtotal: { type: number }
+                  discount: { type: number }
+                  tax: { type: number }
+                  shipping: { type: number }
+                  total: { type: number }
+
+    delete:
+      tags: [Cart]
+      security: [{ bearerAuth: [] }]
+      summary: Clear cart
+      responses:
+        '204': { description: Cart cleared }
+
+  /cart/items:
+    post:
+      tags: [Cart]
+      security: [{ bearerAuth: [] }]
+      summary: Add item to cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, quantity]
+              properties:
+                variantId: { type: string, format: uuid }
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        '201': { description: Item added }
+        '400': { description: Insufficient stock }
+        '404': { description: Variant not found }
+
+  /cart/items/{itemId}:
+    patch:
+      tags: [Cart]
+      security: [{ bearerAuth: [] }]
+      summary: Update item quantity
+      parameters:
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Updated }
+        '400': { description: Insufficient stock }
+
+    delete:
+      tags: [Cart]
+      security: [{ bearerAuth: [] }]
+      summary: Remove item from cart
+      parameters:
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Removed }
+
+  # ─── WISHLIST ─────────────────────────────────────────
+  /wishlist:
+    get:
+      tags: [Wishlist]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Wishlist items }
+
+    post:
+      tags: [Wishlist]
+      security: [{ bearerAuth: [] }]
+      summary: Add product to wishlist
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId: { type: string, format: uuid }
+      responses:
+        '201': { description: Added }
+
+  /wishlist/{productId}:
+    delete:
+      tags: [Wishlist]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Removed }
+
+  /wishlist/move-to-cart:
+    post:
+      tags: [Wishlist]
+      security: [{ bearerAuth: [] }]
+      summary: Move wishlist items to cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productIds: { type: array, items: { type: string } }
+                moveAll: { type: boolean }
+      responses:
+        '200': { description: Items moved }
+
+  # ─── CHECKOUT ─────────────────────────────────────────
+  /checkout/validate-address:
+    post:
+      tags: [Checkout]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pincode]
+              properties:
+                pincode: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: Serviceability result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  serviceable: { type: boolean }
+                  estimatedDays: { type: integer }
+
+  /checkout/create-order:
+    post:
+      tags: [Checkout]
+      security: [{ bearerAuth: [] }]
+      summary: Create order and initiate payment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shippingAddress, paymentMethod]
+              properties:
+                shippingAddressId: { type: string }
+                shippingAddress: { type: object }
+                paymentMethod: { type: string, enum: [card, upi, netbanking, wallet, cod] }
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderId: { type: string }
+                  orderNumber: { type: string }
+                  razorpayOrderId: { type: string, nullable: true }
+                  amount: { type: number }
+
+  /checkout/verify-payment:
+    post:
+      tags: [Checkout]
+      security: [{ bearerAuth: [] }]
+      summary: Verify Razorpay payment signature
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, razorpayPaymentId, razorpayOrderId, razorpaySignature]
+              properties:
+                orderId: { type: string }
+                razorpayPaymentId: { type: string }
+                razorpayOrderId: { type: string }
+                razorpaySignature: { type: string }
+      responses:
+        '200': { description: Payment verified, order confirmed }
+
+  # ─── ORDERS ───────────────────────────────────────────
+  /orders:
+    get:
+      tags: [Orders]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Order history }
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Order detail with timeline }
+
+  /orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Order cancelled }
+        '400': { description: Cannot cancel (already shipped) }
+
+  # ─── REVIEWS ──────────────────────────────────────────
+  /products/{productId}/reviews:
+    get:
+      tags: [Reviews]
+      parameters:
+        - { name: productId, in: path, required: true, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: Approved reviews list }
+
+    post:
+      tags: [Reviews]
+      security: [{ bearerAuth: [] }]
+      summary: Submit review (verified purchase required)
+      parameters:
+        - { name: productId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, rating, body]
+              properties:
+                orderId: { type: string }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                title: { type: string }
+                body: { type: string, minLength: 10 }
+      responses:
+        '201': { description: Review submitted (pending moderation) }
+        '403': { description: Not a verified purchaser }
+
+  # ─── RETURNS ──────────────────────────────────────────
+  /returns:
+    get:
+      tags: [Returns]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: User return requests }
+
+    post:
+      tags: [Returns]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderItemId, reason]
+              properties:
+                orderItemId: { type: string }
+                reason: { type: string, enum: [defective, wrong_item, size_issue, changed_mind, other] }
+                description: { type: string }
+      responses:
+        '201': { description: Return requested }
+        '400': { description: Outside return window }
+
+  /returns/{returnId}:
+    get:
+      tags: [Returns]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Return status detail }
+
+  # ─── ADMIN ────────────────────────────────────────────
+  /admin/dashboard:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      summary: Dashboard metrics
+      responses:
+        '200':
+          description: Revenue, orders, top products
+        '403': { description: Admin only }
+
+  /admin/products:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      summary: Create product
+      responses:
+        '201': { description: Product created }
+
+  /admin/products/{id}:
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      summary: Update product
+      responses:
+        '200': { description: Updated }
+
+    delete:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Soft deleted }
+
+  /admin/orders:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: All orders }
+
+  /admin/orders/{orderId}/status:
+    patch:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string }
+                trackingNumber: { type: string }
+      responses:
+        '200': { description: Status updated }
+
+  /admin/inventory/{variantId}:
+    patch:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stockQuantity]
+              properties:
+                stockQuantity: { type: integer }
+                reason: { type: string }
+      responses:
+        '200': { description: Stock updated }
+
+  /admin/reviews/{reviewId}/moderate:
+    patch:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [approved, rejected, hidden] }
+      responses:
+        '200': { description: Review moderated }
+
+  /admin/returns/{returnId}:
+    patch:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string }
+                adminNotes: { type: string }
+                refundAmount: { type: number }
+      responses:
+        '200': { description: Return processed }
+
+  /webhooks/razorpay:
+    post:
+      tags: [Checkout]
+      summary: Razorpay payment webhook
+      responses:
+        '200': { description: Webhook processed }
